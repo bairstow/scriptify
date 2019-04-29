@@ -2,29 +2,60 @@
 
 var _react = _interopRequireDefault(require("react"));
 
-var _ink = require("ink");
+var _moment = _interopRequireDefault(require("moment"));
 
-var _inkBox = _interopRequireDefault(require("ink-box"));
+var _fs = _interopRequireDefault(require("fs"));
+
+var _ink = require("ink");
 
 var _inkTextInput = _interopRequireDefault(require("ink-text-input"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const GENERATION_KEYS = ['companyId', 'areaId', 'demandType', 'demandDriverId', 'startDate', 'endDate', 'averageValue', 'valuePattern', 'outputFilePath'];
+const GENERATION_DATA = [{
+  key: 'companyId',
+  display: 'Company ID'
+}, {
+  key: 'areaId',
+  display: 'Area ID'
+}, {
+  key: 'demandType',
+  display: 'Demand Type (forecast/actual)'
+}, {
+  key: 'demandDriverId',
+  display: 'Demand Driver ID'
+}, {
+  key: 'startDate',
+  display: 'Start Date (DD/MM/YYYY)'
+}, {
+  key: 'endDate',
+  display: 'End Date (DD/MM/YYYY)'
+}, {
+  key: 'averageValue',
+  display: 'Average Value'
+}, {
+  key: 'outputFileName',
+  display: 'Output Filename'
+}];
 
-const generateNulledValues = keys => keys.reduce((key, result) => {
+const generateNulledValues = data => data.reduce((datum, result) => {
   return Object.assign({}, result, {
-    key: null
+    [datum.key]: null
   });
 }, {});
 
-const generateTableData = (keys, data) => keys.map(key => ({
-  name: key,
-  value: data[key] || '-'
-}));
+const generateTableData = stateData => GENERATION_DATA.map(datum => {
+  return {
+    name: datum.display,
+    value: stateData[datum.key] || '-'
+  };
+});
 
 const dividerChar = '-';
-const dividerString = dividerChar.repeat(25);
+const dividerString = dividerChar.repeat(33);
+const dateFormat = 'DD/MM/YYYY';
+
+const formatEntryTimestamp = momentValue => `${momentValue.format('x')}000000`;
 
 class Dialog extends _react.default.PureComponent {
   constructor() {
@@ -32,14 +63,14 @@ class Dialog extends _react.default.PureComponent {
     this.state = Object.assign({
       inputStage: 0,
       inputValue: ''
-    }, generateNulledValues(GENERATION_KEYS));
+    }, generateNulledValues(GENERATION_DATA));
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
     this.generateOutputFile = this.generateOutputFile.bind(this);
   }
 
   checkInputComplete(inputStage) {
-    return inputStage === GENERATION_KEYS.length;
+    return inputStage === GENERATION_DATA.length;
   }
 
   handleInputChange(inputValue) {
@@ -53,7 +84,7 @@ class Dialog extends _react.default.PureComponent {
       inputStage,
       inputValue
     } = this.state;
-    const currentSubmissionKey = GENERATION_KEYS[inputStage];
+    const currentSubmissionKey = GENERATION_DATA[inputStage].key;
     const nextInputStage = inputStage + 1;
     this.setState({
       inputStage: nextInputStage,
@@ -63,7 +94,41 @@ class Dialog extends _react.default.PureComponent {
     if (this.checkInputComplete(nextInputStage)) this.generateOutputFile();
   }
 
-  generateOutputFile() {}
+  generateOutputFile() {
+    const {
+      companyId,
+      areaId,
+      demandType,
+      demandDriverId,
+      startDate,
+      endDate,
+      averageValue,
+      outputFileName
+    } = this.state;
+    const currentTimestamp = (0, _moment.default)().format('X');
+    const startMoment = (0, _moment.default)(startDate, dateFormat).add(10, 'h');
+    const endMoment = (0, _moment.default)(endDate, dateFormat).add(10, 'h');
+    const timestampRange = [];
+
+    while (!startMoment.isSame(endMoment)) {
+      timestampRange.push(formatEntryTimestamp(startMoment));
+      startMoment.add(1, 'd');
+    }
+
+    timestampRange.push(formatEntryTimestamp(startMoment));
+    const templateString = `insert demand,company_id=${companyId},area_id=${areaId},type=${demandType},driver_id=${demandDriverId} last_modified=${currentTimestamp},value=${averageValue}`;
+    const generatedEntries = timestampRange.map(timestamp => `${templateString} ${timestamp}\n`);
+
+    _fs.default.writeFile(outputFileName, generatedEntries.join(''), error => {
+      if (error) {
+        console.log({
+          error
+        });
+      } else {
+        console.log(`Successfully generated ${outputFileName}`);
+      }
+    });
+  }
 
   renderTableRow(entry) {
     const {
@@ -75,7 +140,7 @@ class Dialog extends _react.default.PureComponent {
       width: '100%',
       flexDirection: 'row'
     }, _react.default.createElement(_ink.Box, {
-      width: 24
+      width: 32
     }, _react.default.createElement(_ink.Color, {
       blue: true
     }, name)), _react.default.createElement(_ink.Box, {
@@ -96,13 +161,13 @@ class Dialog extends _react.default.PureComponent {
       inputStage,
       inputValue
     } = this.state;
-    const inputKey = GENERATION_KEYS[inputStage];
+    const inputDisplay = GENERATION_DATA[inputStage].display;
     return _react.default.createElement(_ink.Box, {
       width: '100%',
       flexDirection: 'row'
     }, _react.default.createElement(_ink.Box, {
       paddingRight: 1
-    }, "Please enter ", inputKey, ":"), _react.default.createElement(_inkTextInput.default, {
+    }, "Please enter ", inputDisplay, ":"), _react.default.createElement(_inkTextInput.default, {
       value: inputValue,
       onChange: this.handleInputChange,
       onSubmit: this.handleInputSubmit
@@ -110,7 +175,7 @@ class Dialog extends _react.default.PureComponent {
   }
 
   render() {
-    const tableData = generateTableData(GENERATION_KEYS, this.state);
+    const tableData = generateTableData(this.state);
     return _react.default.createElement(_ink.Box, {
       width: '100%',
       flexDirection: 'column'

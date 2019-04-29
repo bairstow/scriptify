@@ -1,26 +1,54 @@
 import React from 'react';
+import moment from 'moment';
+import fs from 'fs';
 import {render, Box, Color} from 'ink';
-import InkBox from 'ink-box';
 import TextInput from 'ink-text-input';
 
-const GENERATION_KEYS = [
-  'companyId',
-  'areaId',
-  'demandType',
-  'demandDriverId',
-  'startDate',
-  'endDate',
-  'averageValue',
-  'valuePattern',
-  'outputFilePath'
+const GENERATION_DATA = [
+  {
+    key: 'companyId',
+    display: 'Company ID',
+  },
+  {
+    key: 'areaId',
+    display: 'Area ID',
+  },
+  {
+    key: 'demandType',
+    display: 'Demand Type (forecast/actual)',
+  },
+  {
+    key: 'demandDriverId',
+    display: 'Demand Driver ID',
+  },
+  {
+    key: 'startDate',
+    display: 'Start Date (DD/MM/YYYY)',
+  },
+  {
+    key: 'endDate',
+    display: 'End Date (DD/MM/YYYY)',
+  },
+  {
+    key: 'averageValue',
+    display: 'Average Value',
+  },
+  {
+    key: 'outputFileName',
+    display: 'Output Filename',
+  },
 ];
 
-const generateNulledValues = keys => keys.reduce((key, result) => {
-  return Object.assign({}, result, { key: null });
+const generateNulledValues = data => data.reduce((datum, result) => {
+  return Object.assign({}, result, { [datum.key]: null });
 }, {});
-const generateTableData = (keys, data) => keys.map(key => ({ name: key, value: (data[key] || '-') }));
+const generateTableData = (stateData) => GENERATION_DATA.map(datum => {
+  return ({ name: datum.display, value: (stateData[datum.key] || '-') });
+});
 const dividerChar = '-';
-const dividerString = dividerChar.repeat(25);
+const dividerString = dividerChar.repeat(33);
+const dateFormat = 'DD/MM/YYYY';
+const formatEntryTimestamp = momentValue => `${momentValue.format('x')}000000`;
 
 class Dialog extends React.PureComponent {
   constructor() {
@@ -29,7 +57,7 @@ class Dialog extends React.PureComponent {
     this.state = Object.assign({
       inputStage: 0,
       inputValue: '',
-    }, generateNulledValues(GENERATION_KEYS));
+    }, generateNulledValues(GENERATION_DATA));
 
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
@@ -37,7 +65,7 @@ class Dialog extends React.PureComponent {
   }
 
   checkInputComplete(inputStage) {
-    return inputStage === GENERATION_KEYS.length;
+    return inputStage === GENERATION_DATA.length;
   }
 
   handleInputChange(inputValue) {
@@ -46,26 +74,46 @@ class Dialog extends React.PureComponent {
 
   handleInputSubmit() {
     const { inputStage, inputValue } = this.state;
-    const currentSubmissionKey = GENERATION_KEYS[inputStage];
+    const currentSubmissionKey = GENERATION_DATA[inputStage].key;
 
     const nextInputStage = inputStage + 1;
     this.setState({
       inputStage: nextInputStage,
       inputValue: '',
-      [currentSubmissionKey]: inputValue
+      [currentSubmissionKey]: inputValue,
     });
 
     if (this.checkInputComplete(nextInputStage)) this.generateOutputFile();
   }
 
   generateOutputFile() {
+    const { companyId, areaId, demandType, demandDriverId, startDate, endDate, averageValue, outputFileName } = this.state;
+    const currentTimestamp = moment().format('X');
+    const startMoment = moment(startDate, dateFormat).add(10, 'h');
+    const endMoment = moment(endDate, dateFormat).add(10, 'h');
+
+    const timestampRange = [];
+    while (!startMoment.isSame(endMoment)) {
+      timestampRange.push(formatEntryTimestamp(startMoment));
+      startMoment.add(1, 'd');
+    }
+    timestampRange.push(formatEntryTimestamp(startMoment));
+    const templateString = `insert demand,company_id=${companyId},area_id=${areaId},type=${demandType},driver_id=${demandDriverId} last_modified=${currentTimestamp},value=${averageValue}`
+    const generatedEntries = timestampRange.map(timestamp => `${templateString} ${timestamp}\n`);
+    fs.writeFile(outputFileName, generatedEntries.join(''), error => {
+      if (error) {
+        console.log({ error });
+      } else {
+        console.log(`Successfully generated ${outputFileName}`);
+      }
+    });
   }
 
   renderTableRow(entry) {
     const { name, value } = entry;
     return (
       <Box key={name} width={'100%'} flexDirection={'row'}>
-        <Box width={24}>
+        <Box width={32}>
           <Color blue>{name}</Color>
         </Box>
         <Box paddingRight={1}>|</Box>
@@ -82,17 +130,17 @@ class Dialog extends React.PureComponent {
 
   renderInput() {
     const { inputStage, inputValue } = this.state;
-    const inputKey = GENERATION_KEYS[inputStage];
+    const inputDisplay = GENERATION_DATA[inputStage].display;
     return (
       <Box width={'100%'} flexDirection={'row'}>
-        <Box paddingRight={1}>Please enter {inputKey}:</Box>
+        <Box paddingRight={1}>Please enter {inputDisplay}:</Box>
         <TextInput value={inputValue} onChange={this.handleInputChange} onSubmit={this.handleInputSubmit} />
       </Box>
     );
   }
 
   render() {
-    const tableData = generateTableData(GENERATION_KEYS, this.state);
+    const tableData = generateTableData(this.state);
     return (
       <Box width={'100%'} flexDirection={'column'}>
         {this.renderDivider()}
