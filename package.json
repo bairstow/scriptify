@@ -1,0 +1,43 @@
+{
+  "name": "scriptify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch:demandify": "nodemon --watch demandify -x \"npx babel demandify --out-dir demandify-dist\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/polyfill": "^7.4.3",
+    "import-jsx": "^2.0.0",
+    "ink": "^2.1.1",
+    "ink-box": "^1.0.0",
+    "ink-divider": "^1.1.1",
+    "ink-table": "^1.0.3",
+    "ink-text-input": "^3.1.1",
+    "react": "^16.8.6"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.4.3",
+    "@babel/core": "^7.4.3",
+    "@babel/preset-env": "^7.4.3",
+    "@babel/preset-react": "^7.0.0",
+    "nodemon": "^1.18.11"
+  },
+  "babel": {
+    "presets": [
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "current"
+          }
+        }
+      ],
+      "@babel/preset-react"
+    ]
+  }
+}
