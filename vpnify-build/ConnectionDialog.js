@@ -4,6 +4,8 @@ var _child_process = require("child_process");
 
 var _react = _interopRequireDefault(require("react"));
 
+var _moment = _interopRequireDefault(require("moment"));
+
 var _ink = require("ink");
 
 var _inkTextInput = _interopRequireDefault(require("ink-text-input"));
@@ -14,20 +16,11 @@ var _utilities = require("./utilities");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+const dateFormat = 'DD_MM_YYYY';
 const dividerLength = 36;
 const dividerChar = '-';
 const dividerString = dividerChar.repeat(dividerLength);
-const versionTextMatch = new RegExp('^OpenVPN'); // fetch status utility call
-// - output to /tmp vpn directory
-// - check exists on script call and output
-// - clear directory on disconnection or new area connection
-//
-// sudo openvpn --config ~/script/resource/my_expressvpn_usa_-_san_francisco_udp.ovpn
-// display barred output of current status
-// add scrollable/selectable/searchable list of location options
-// handle enter to connect to new location. esc to exit script with no effect. x to disconnect
-// output results before exiting
-// delete home script and auth files
+const versionTextMatch = new RegExp('^OpenVPN');
 
 class ConnectionDialog extends _react.default.PureComponent {
   constructor() {
@@ -35,18 +28,92 @@ class ConnectionDialog extends _react.default.PureComponent {
     this.state = {
       version: '-',
       status: '-',
+      connectionOptions: [],
       mode: 'option',
-      inputValue: ''
+      inputValue: '',
+      logFilename: '',
+      versionInfoProcess: null,
+      logOutputProcess: null,
+      connectionFilesProcess: null,
+      connectionProcess: null
     };
+    this.killProcess = this.killProcess.bind(this);
+    this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
+    this.fetchConnectionStatus = this.fetchConnectionStatus.bind(this);
+    this.fetchConnectionOptions = this.fetchConnectionOptions.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
-    this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
+    this.handleConnectionSelection = this.handleConnectionSelection.bind(this);
     this.renderVersionInfo = this.renderVersionInfo.bind(this);
     this.renderConnectionStatus = this.renderConnectionStatus.bind(this);
+    this.renderConnectionSelection = this.renderConnectionSelection.bind(this);
   }
 
   componentDidMount() {
     this.fetchVersionInfo();
+    this.fetchConnectionOptions();
+  }
+
+  componentWillUnmount() {
+    this.killAllActiveProcesses();
+  }
+
+  killActiveConnection() {
+    this.killProcess('connectionProcess');
+  }
+
+  killAllActiveProcesses() {
+    const processKeys = ['versionInfoProcess', 'logOutputProcess', 'connectionFilesProcess', 'connectionProcess'];
+    processKeys.forEach(key => this.killProcess(key));
+  }
+
+  killProcess(processKey) {
+    const process = this.state[processKey];
+    if (!!process && process.hasOwnProperty('kill')) value.kill();
+  }
+
+  fetchVersionInfo() {
+    const versionInfoProcess = (0, _child_process.exec)('openvpn --version');
+    versionInfoProcess.stdout.on('data', data => {
+      const versionOutput = data.split('\n');
+      versionOutput.forEach(line => {
+        if (versionTextMatch.test(line)) {
+          const displayText = line.split('[')[0];
+          this.setState({
+            version: displayText
+          });
+        }
+      });
+    });
+    this.setState({
+      versionInfoProcess
+    });
+  }
+
+  fetchConnectionStatus(filename) {
+    const logOutputProcess = (0, _child_process.exec)(`sudo tail -8f ${filename}`);
+    logOutputProcess.stdout.on('data', data => {
+      this.setState({
+        status: data
+      });
+    });
+    this.setState({
+      logOutputProcess
+    });
+  }
+
+  fetchConnectionOptions() {
+    const connectionFilesProcess = (0, _child_process.exec)('ls /etc/openvpn/client/config');
+    connectionFilesProcess.stdout.on('data', data => {
+      const rawOptions = data.split('\n');
+      const connectionOptions = rawOptions.slice(0, rawOptions.length - 1);
+      this.setState({
+        connectionOptions
+      });
+    });
+    this.setState({
+      connectionFilesProcess
+    });
   }
 
   handleInputChange(inputValue) {
@@ -62,6 +129,7 @@ class ConnectionDialog extends _react.default.PureComponent {
 
     switch (inputValue) {
       case 'c':
+        this.killActiveConnection();
         this.setState({
           mode: 'option',
           inputValue: ''
@@ -76,6 +144,7 @@ class ConnectionDialog extends _react.default.PureComponent {
         break;
 
       case 'e':
+        this.killAllActiveProcesses();
         this.setState({
           mode: 'exit',
           inputValue: ''
@@ -90,23 +159,17 @@ class ConnectionDialog extends _react.default.PureComponent {
     }
   }
 
-  fetchVersionInfo() {
-    const versionInfo = (0, _child_process.exec)('openvpn --version');
-    versionInfo.stdout.on('data', data => {
-      const versionOutput = data.split('\n');
-      versionOutput.forEach(line => {
-        if (versionTextMatch.test(line)) {
-          const displayText = line.split('[')[0];
-          this.setState({
-            version: displayText
-          });
-        }
-      });
+  handleConnectionSelection(item) {
+    const logFilename = `/etc/openvpn/client/log/${(0, _moment.default)().format(dateFormat)}.log`;
+    const connectionCommand = `sudo openvpn --config ~/script/resource/${item.value} --log ${logFilename}`;
+    const connectionProcess = (0, _child_process.exec)(connectionCommand);
+    this.fetchConnectionStatus(logFilename);
+    this.setState({
+      mode: 'option',
+      inputValue: '',
+      logFilename,
+      connectionProcess
     });
-  }
-
-  fetchConnectionStatus() {
-    return '-';
   }
 
   renderDivider(title = 'default') {
@@ -143,21 +206,16 @@ class ConnectionDialog extends _react.default.PureComponent {
   }
 
   renderConnectionSelection() {
-    const items = [{
-      label: 'San Francisco',
-      value: 'sf'
-    }, {
-      label: 'Test',
-      value: 'test'
-    }];
-
-    const handleSelect = item => {
-      console.log(`label: ${item.label}, value: ${item.value}`);
-    };
-
+    const {
+      connectionOptions
+    } = this.state;
+    const items = connectionOptions.map(connection => ({
+      label: connection,
+      value: connection
+    }));
     return _react.default.createElement(_inkSelectInput.default, {
       items: items,
-      onSelect: handleSelect
+      onSelect: this.handleConnectionSelection
     });
   }
 

@@ -1,32 +1,17 @@
 import { exec } from 'child_process';
 import React from 'react';
+import moment from 'moment';
 import { render, Box, Color } from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 
 import { fetchConnectionStatus } from './utilities';
 
+const dateFormat = 'DD_MM_YYYY';
 const dividerLength = 36;
 const dividerChar = '-';
 const dividerString = dividerChar.repeat(dividerLength);
 const versionTextMatch = new RegExp('^OpenVPN');
-
-// fetch status utility call
-// - output to /tmp vpn directory
-// - check exists on script call and output
-// - clear directory on disconnection or new area connection
-//
-// sudo openvpn --config ~/script/resource/my_expressvpn_usa_-_san_francisco_udp.ovpn
-
-// display barred output of current status
-
-// add scrollable/selectable/searchable list of location options
-
-// handle enter to connect to new location. esc to exit script with no effect. x to disconnect
-
-// output results before exiting
-
-// delete home script and auth files
 
 class ConnectionDialog extends React.PureComponent {
   constructor() {
@@ -35,18 +20,92 @@ class ConnectionDialog extends React.PureComponent {
     this.state = {
       version: '-',
       status: '-',
+      connectionOptions: [],
       mode: 'option',
       inputValue: '',
+      logFilename: '',
+      versionInfoProcess: null,
+      logOutputProcess: null,
+      connectionFilesProcess: null,
+      connectionProcess: null,
     };
+    this.killProcess = this.killProcess.bind(this);
+    this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
+    this.fetchConnectionStatus = this.fetchConnectionStatus.bind(this);
+    this.fetchConnectionOptions = this.fetchConnectionOptions.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
-    this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
+    this.handleConnectionSelection = this.handleConnectionSelection.bind(this);
     this.renderVersionInfo = this.renderVersionInfo.bind(this);
     this.renderConnectionStatus = this.renderConnectionStatus.bind(this);
+    this.renderConnectionSelection = this.renderConnectionSelection.bind(this);
   }
 
   componentDidMount() {
     this.fetchVersionInfo();
+    this.fetchConnectionOptions();
+  }
+
+  componentWillUnmount() {
+    this.killAllActiveProcesses();
+  }
+
+  killActiveConnection() {
+    this.killProcess('connectionProcess');
+  }
+
+  killAllActiveProcesses() {
+    const processKeys = ['versionInfoProcess', 'logOutputProcess', 'connectionFilesProcess', 'connectionProcess'];
+    processKeys.forEach(key => this.killProcess(key));
+  }
+
+  killProcess(processKey) {
+    const process = this.state[processKey];
+    if (!!process && process.hasOwnProperty('kill')) value.kill();
+  }
+
+  fetchVersionInfo() {
+    const versionInfoProcess = exec('openvpn --version');
+    versionInfoProcess.stdout.on('data', data => {
+      const versionOutput = data.split('\n');
+      versionOutput.forEach(line => {
+        if (versionTextMatch.test(line)) {
+          const displayText = line.split('[')[0];
+          this.setState({
+            version: displayText,
+          });
+        }
+      });
+    });
+    this.setState({
+      versionInfoProcess,
+    });
+  }
+
+  fetchConnectionStatus(filename) {
+    const logOutputProcess = exec(`sudo tail -8f ${filename}`);
+    logOutputProcess.stdout.on('data', data => {
+      this.setState({
+        status: data,
+      });
+    });
+    this.setState({
+      logOutputProcess,
+    });
+  }
+
+  fetchConnectionOptions() {
+    const connectionFilesProcess = exec('ls /etc/openvpn/client/config');
+    connectionFilesProcess.stdout.on('data', data => {
+      const rawOptions = data.split('\n');
+      const connectionOptions = rawOptions.slice(0, rawOptions.length - 1);
+      this.setState({
+        connectionOptions,
+      });
+    });
+    this.setState({
+      connectionFilesProcess,
+    });
   }
 
   handleInputChange(inputValue) {
@@ -58,6 +117,7 @@ class ConnectionDialog extends React.PureComponent {
 
     switch (inputValue) {
       case 'c':
+        this.killActiveConnection();
         this.setState({
           mode: 'option',
           inputValue: '',
@@ -70,6 +130,7 @@ class ConnectionDialog extends React.PureComponent {
         });
         break;
       case 'e':
+        this.killAllActiveProcesses();
         this.setState({
           mode: 'exit',
           inputValue: '',
@@ -83,23 +144,17 @@ class ConnectionDialog extends React.PureComponent {
     }
   }
 
-  fetchVersionInfo() {
-    const versionInfo = exec('openvpn --version');
-    versionInfo.stdout.on('data', data => {
-      const versionOutput = data.split('\n');
-      versionOutput.forEach(line => {
-        if (versionTextMatch.test(line)) {
-          const displayText = line.split('[')[0];
-          this.setState({
-            version: displayText,
-          });
-        }
-      });
+  handleConnectionSelection(item) {
+    const logFilename = `/etc/openvpn/client/log/${moment().format(dateFormat)}.log`;
+    const connectionCommand = `sudo openvpn --config ~/script/resource/${item.value} --log ${logFilename}`;
+    const connectionProcess = exec(connectionCommand);
+    this.fetchConnectionStatus(logFilename);
+    this.setState({
+      mode: 'option',
+      inputValue: '',
+      logFilename,
+      connectionProcess,
     });
-  }
-
-  fetchConnectionStatus() {
-    return '-';
   }
 
   renderDivider(title = 'default') {
@@ -135,20 +190,9 @@ class ConnectionDialog extends React.PureComponent {
   }
 
   renderConnectionSelection() {
-    const items = [
-      {
-        label: 'San Francisco',
-        value: 'sf',
-      },
-      {
-        label: 'Test',
-        value: 'test',
-      },
-    ];
-    const handleSelect = item => {
-      console.log(`label: ${item.label}, value: ${item.value}`);
-    };
-    return <SelectInput items={items} onSelect={handleSelect} />;
+    const { connectionOptions } = this.state;
+    const items = connectionOptions.map(connection => ({ label: connection, value: connection }));
+    return <SelectInput items={items} onSelect={this.handleConnectionSelection} />;
   }
 
   render() {
