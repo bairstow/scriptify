@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch:demandify": "nodemon --watch demandify -x \"npx babel demandify --out-dir demandify-dist\""
+    "watch:demandify": "nodemon --watch demandify-src -x \"npx babel demandify-src --out-dir demandify-build\"",
+    "watch:vpnify": "nodemon --watch vpnify-src -x \"npx babel vpnify-src --out-dir vpnify-build\""
   },
   "keywords": [],
   "author": "",
@@ -14,8 +15,10 @@
     "import-jsx": "^2.0.0",
     "ink": "^2.1.1",
     "ink-box": "^1.0.0",
+    "ink-select-input": "^3.1.1",
     "ink-text-input": "^3.1.1",
     "moment": "^2.24.0",
+    "openvpn-bin": "^0.1.2",
     "react": "^16.8.6"
   },
   "devDependencies": {
