@@ -218,7 +218,7 @@ class ConnectionDialog extends React.PureComponent {
     const { inputValue } = this.state;
     return (
       <div>
-        <Box>[c]lose connection [s]elect new connection [e]xit</Box>
+        <Box>[c]lose open connection [s]elect new connection [ctrl^C]exit</Box>
         <TextInput value={inputValue} onChange={this.handleInputChange} onSubmit={this.handleInputSubmit} />
       </div>
     );
