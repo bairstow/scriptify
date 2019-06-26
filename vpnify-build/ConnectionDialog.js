@@ -62,14 +62,15 @@ class ConnectionDialog extends _react.default.PureComponent {
     this.killAllActiveProcesses();
   }
 
+  killAllActiveProcesses() {
+    this.killActiveConnection();
+    const processKeys = ['versionInfoProcess', 'logOutputProcess', 'connectionFilesProcess'];
+    processKeys.forEach(key => this.killProcess(key));
+  }
+
   killActiveConnection() {
     this.killProcess('connectionProcess');
     this.killPreExistingConnection();
-  }
-
-  killAllActiveProcesses() {
-    const processKeys = ['versionInfoProcess', 'logOutputProcess', 'connectionFilesProcess', 'connectionProcess'];
-    processKeys.forEach(key => this.killProcess(key));
   }
 
   killProcess(processKey) {
@@ -79,17 +80,27 @@ class ConnectionDialog extends _react.default.PureComponent {
       // as exec utilises spawn under the hood, killing the process reference here will only close the associated shell
       // and we need to also clean up it's child processes.
       (0, _psTree.default)(process.pid, (err, children) => {
-        (0, _child_process.spawn)('kill', ['-9'].concat(children.map(child => child.PID)));
+        const childProcessPIDList = children.map(child => child.PID).join(' ');
+        (0, _child_process.exec)(`sudo kill -9 ${childProcessPIDList}`);
       });
-
-      if (process.hasOwnProperty('kill')) {
-        process.kill();
-      }
+      (0, _child_process.exec)(`sudo kill -9 ${process.pid}`);
     }
   }
 
   killPreExistingConnection() {
-    return;
+    const searchOpenVPNProcess = (0, _child_process.exec)('pidof openvpn');
+    searchOpenVPNProcess.stdout.on('data', pid => {
+      (0, _psTree.default)(pid, (err, children) => {
+        if (!!children && children.length) {
+          const childProcessPIDList = children.map(child => child.PID).join(' ');
+          this.setState({
+            debugInfo: `pid: ${pid}, childList: ${childProcessPIDList}`
+          });
+          (0, _child_process.exec)(`sudo kill -9 ${childProcessPIDList}`);
+        }
+      });
+      (0, _child_process.exec)(`sudo kill -9 ${pid}`);
+    });
   }
 
   fetchVersionInfo() {
