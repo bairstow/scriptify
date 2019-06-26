@@ -2,6 +2,8 @@
 
 var _child_process = require("child_process");
 
+var _psTree = _interopRequireDefault(require("ps-tree"));
+
 var _react = _interopRequireDefault(require("react"));
 
 var _moment = _interopRequireDefault(require("moment"));
@@ -32,6 +34,7 @@ class ConnectionDialog extends _react.default.PureComponent {
       mode: 'option',
       inputValue: '',
       logFilename: '',
+      debugInfo: '-',
       versionInfoProcess: null,
       logOutputProcess: null,
       connectionFilesProcess: null,
@@ -39,13 +42,14 @@ class ConnectionDialog extends _react.default.PureComponent {
     };
     this.killProcess = this.killProcess.bind(this);
     this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
-    this.fetchConnectionStatus = this.fetchConnectionStatus.bind(this);
+    this.logConnectionStatus = this.logConnectionStatus.bind(this);
     this.fetchConnectionOptions = this.fetchConnectionOptions.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
     this.handleConnectionSelection = this.handleConnectionSelection.bind(this);
     this.renderVersionInfo = this.renderVersionInfo.bind(this);
     this.renderConnectionStatus = this.renderConnectionStatus.bind(this);
+    this.renderDebugInfo = this.renderDebugInfo.bind(this);
     this.renderConnectionSelection = this.renderConnectionSelection.bind(this);
   }
 
@@ -60,6 +64,7 @@ class ConnectionDialog extends _react.default.PureComponent {
 
   killActiveConnection() {
     this.killProcess('connectionProcess');
+    this.killPreExistingConnection();
   }
 
   killAllActiveProcesses() {
@@ -69,7 +74,22 @@ class ConnectionDialog extends _react.default.PureComponent {
 
   killProcess(processKey) {
     const process = this.state[processKey];
-    if (!!process && process.hasOwnProperty('kill')) value.kill();
+
+    if (!!process) {
+      // as exec utilises spawn under the hood, killing the process reference here will only close the associated shell
+      // and we need to also clean up it's child processes.
+      (0, _psTree.default)(process.pid, (err, children) => {
+        (0, _child_process.spawn)('kill', ['-9'].concat(children.map(child => child.PID)));
+      });
+
+      if (process.hasOwnProperty('kill')) {
+        process.kill();
+      }
+    }
+  }
+
+  killPreExistingConnection() {
+    return;
   }
 
   fetchVersionInfo() {
@@ -90,7 +110,7 @@ class ConnectionDialog extends _react.default.PureComponent {
     });
   }
 
-  fetchConnectionStatus(filename) {
+  logConnectionStatus(filename) {
     const logOutputProcess = (0, _child_process.exec)(`sudo tail -8f ${filename}`);
     logOutputProcess.stdout.on('data', data => {
       this.setState({
@@ -160,15 +180,17 @@ class ConnectionDialog extends _react.default.PureComponent {
   }
 
   handleConnectionSelection(item) {
+    this.killActiveConnection();
     const logFilename = `/etc/openvpn/client/log/${(0, _moment.default)().format(dateFormat)}.log`;
-    const connectionCommand = `sudo openvpn --config ~/script/resource/${item.value} --log ${logFilename}`;
+    const connectionCommand = `sudo openvpn --config /etc/openvpn/client/config/${item.value} --log ${logFilename}`;
     const connectionProcess = (0, _child_process.exec)(connectionCommand);
-    this.fetchConnectionStatus(logFilename);
+    this.logConnectionStatus(logFilename);
     this.setState({
       mode: 'option',
       inputValue: '',
       logFilename,
-      connectionProcess
+      connectionProcess,
+      debugInfo: connectionCommand
     });
   }
 
@@ -192,6 +214,10 @@ class ConnectionDialog extends _react.default.PureComponent {
 
   renderConnectionStatus() {
     return _react.default.createElement(_ink.Box, null, this.state.status);
+  }
+
+  renderDebugInfo() {
+    return _react.default.createElement(_ink.Box, null, this.state.debugInfo);
   }
 
   renderModeOptions() {
@@ -226,7 +252,7 @@ class ConnectionDialog extends _react.default.PureComponent {
     return _react.default.createElement(_ink.Box, {
       width: '100%',
       flexDirection: 'column'
-    }, this.renderDivider('version'), this.renderVersionInfo(), this.renderDivider('status'), this.renderConnectionStatus(), this.renderDivider(mode), mode === 'option' && this.renderModeOptions(), mode === 'select' && this.renderConnectionSelection());
+    }, this.renderDivider('version'), this.renderVersionInfo(), this.renderDivider('status'), this.renderConnectionStatus(), this.renderDivider('debug'), this.renderDebugInfo(), this.renderDivider(mode), mode === 'option' && this.renderModeOptions(), mode === 'select' && this.renderConnectionSelection());
   }
 
 }

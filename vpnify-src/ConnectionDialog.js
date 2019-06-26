@@ -1,11 +1,12 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
+import psTree from 'ps-tree';
 import React from 'react';
 import moment from 'moment';
 import { render, Box, Color } from 'ink';
 import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
 
-import { fetchConnectionStatus } from './utilities';
+import { logConnectionStatus } from './utilities';
 
 const dateFormat = 'DD_MM_YYYY';
 const dividerLength = 36;
@@ -24,6 +25,7 @@ class ConnectionDialog extends React.PureComponent {
       mode: 'option',
       inputValue: '',
       logFilename: '',
+      debugInfo: '-',
       versionInfoProcess: null,
       logOutputProcess: null,
       connectionFilesProcess: null,
@@ -31,13 +33,14 @@ class ConnectionDialog extends React.PureComponent {
     };
     this.killProcess = this.killProcess.bind(this);
     this.fetchVersionInfo = this.fetchVersionInfo.bind(this);
-    this.fetchConnectionStatus = this.fetchConnectionStatus.bind(this);
+    this.logConnectionStatus = this.logConnectionStatus.bind(this);
     this.fetchConnectionOptions = this.fetchConnectionOptions.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputSubmit = this.handleInputSubmit.bind(this);
     this.handleConnectionSelection = this.handleConnectionSelection.bind(this);
     this.renderVersionInfo = this.renderVersionInfo.bind(this);
     this.renderConnectionStatus = this.renderConnectionStatus.bind(this);
+    this.renderDebugInfo = this.renderDebugInfo.bind(this);
     this.renderConnectionSelection = this.renderConnectionSelection.bind(this);
   }
 
@@ -52,6 +55,7 @@ class ConnectionDialog extends React.PureComponent {
 
   killActiveConnection() {
     this.killProcess('connectionProcess');
+    this.killPreExistingConnection();
   }
 
   killAllActiveProcesses() {
@@ -61,7 +65,20 @@ class ConnectionDialog extends React.PureComponent {
 
   killProcess(processKey) {
     const process = this.state[processKey];
-    if (!!process && process.hasOwnProperty('kill')) value.kill();
+    if (!!process) {
+      // as exec utilises spawn under the hood, killing the process reference here will only close the associated shell
+      // and we need to also clean up it's child processes.
+      psTree(process.pid, (err, children) => {
+        spawn('kill', ['-9'].concat(children.map(child => child.PID)));
+      });
+      if (process.hasOwnProperty('kill')) {
+        process.kill();
+      }
+    }
+  }
+
+  killPreExistingConnection() {
+    return;
   }
 
   fetchVersionInfo() {
@@ -82,7 +99,7 @@ class ConnectionDialog extends React.PureComponent {
     });
   }
 
-  fetchConnectionStatus(filename) {
+  logConnectionStatus(filename) {
     const logOutputProcess = exec(`sudo tail -8f ${filename}`);
     logOutputProcess.stdout.on('data', data => {
       this.setState({
@@ -145,15 +162,17 @@ class ConnectionDialog extends React.PureComponent {
   }
 
   handleConnectionSelection(item) {
+    this.killActiveConnection();
     const logFilename = `/etc/openvpn/client/log/${moment().format(dateFormat)}.log`;
-    const connectionCommand = `sudo openvpn --config ~/script/resource/${item.value} --log ${logFilename}`;
+    const connectionCommand = `sudo openvpn --config /etc/openvpn/client/config/${item.value} --log ${logFilename}`;
     const connectionProcess = exec(connectionCommand);
-    this.fetchConnectionStatus(logFilename);
+    this.logConnectionStatus(logFilename);
     this.setState({
       mode: 'option',
       inputValue: '',
       logFilename,
       connectionProcess,
+      debugInfo: connectionCommand,
     });
   }
 
@@ -177,6 +196,10 @@ class ConnectionDialog extends React.PureComponent {
 
   renderConnectionStatus() {
     return <Box>{this.state.status}</Box>;
+  }
+
+  renderDebugInfo() {
+    return <Box>{this.state.debugInfo}</Box>;
   }
 
   renderModeOptions() {
@@ -203,6 +226,8 @@ class ConnectionDialog extends React.PureComponent {
         {this.renderVersionInfo()}
         {this.renderDivider('status')}
         {this.renderConnectionStatus()}
+        {this.renderDivider('debug')}
+        {this.renderDebugInfo()}
         {this.renderDivider(mode)}
         {mode === 'option' && this.renderModeOptions()}
         {mode === 'select' && this.renderConnectionSelection()}

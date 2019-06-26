@@ -19,6 +19,7 @@
     "ink-text-input": "^3.1.1",
     "moment": "^2.24.0",
     "openvpn-bin": "^0.1.2",
+    "ps-tree": "^1.2.0",
     "react": "^16.8.6"
   },
   "devDependencies": {
