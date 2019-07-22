@@ -8,7 +8,7 @@ const dividerLength = 36;
 const dividerChar = '-';
 const dividerString = dividerChar.repeat(dividerLength);
 
-const ircJarCommand = 'java -jar ./target/uberjar/jb-irc-manager-0.1.0-SNAPSHOT-standalone.jar';
+const ircJarCommand = 'java -jar /home/josh/git/jb-irc-manager/target/uberjar/jb-irc-manager-0.1.0-SNAPSHOT-standalone.jar';
 const configDefinition = '/home/josh/git/jb-irc-manager/resources/config.edn';
 const NEW_SEARCH = 'NEW_SEARCH';
 const dblQuoteRegex = /"/gi;
@@ -40,10 +40,10 @@ class ConnectionDialog extends React.PureComponent {
 
     const searchOutput = execSync(`${ircJarCommand} -c "${configDefinition}" -s "${inputValue}"`);
     const searchResult = searchOutput
-			    .toString()
-			    .split('\n')
-			    .filter(result => (result !== ''))
-			    .map(result => result.replace(dblQuoteRegex, ''));
+      .toString()
+      .split('\n')
+      .filter(result => result !== '')
+      .map(result => result.replace(dblQuoteRegex, ''));
     this.setState({
       mode: 'select',
       inputValue: '',
@@ -60,8 +60,8 @@ class ConnectionDialog extends React.PureComponent {
     const fetchOutputProcess = exec(`${ircJarCommand} -c "${configDefinition}" -f "${item.value}"`);
     fetchOutputProcess.stdout.on('data', data => {
       this.setState({
-	mode: 'fetch',
-	fetchLog: data,
+        mode: 'fetch',
+        fetchLog: data,
       });
     });
   }
@@ -85,7 +85,7 @@ class ConnectionDialog extends React.PureComponent {
     return (
       <div>
         {this.renderDivider('search')}
-	<Box>Enter search term:</Box>
+        <Box>Enter search term:</Box>
         <TextInput value={inputValue} onChange={this.handleInputChange} onSubmit={this.handleInputSubmit} />
       </div>
     );
@@ -98,7 +98,7 @@ class ConnectionDialog extends React.PureComponent {
     return (
       <div>
         {this.renderDivider('select')}
-	<SelectInput items={items} onSelect={this.handleSelectResult} />
+        <SelectInput items={items} onSelect={this.handleSelectResult} />
       </div>
     );
   }
@@ -117,9 +117,9 @@ class ConnectionDialog extends React.PureComponent {
     const { mode } = this.state;
     return (
       <Box width={'100%'} flexDirection={'column'}>
-	{mode === 'search' && this.renderSearchInput()}
-	{mode === 'select' && this.renderSelectResult()}
-	{mode === 'fetch' && this.renderFetch()}
+        {mode === 'search' && this.renderSearchInput()}
+        {mode === 'select' && this.renderSelectResult()}
+        {mode === 'fetch' && this.renderFetch()}
       </Box>
     );
   }
