@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch:demandify": "nodemon --watch demandify-src -x \"npx babel demandify-src --out-dir demandify-build\"",
-    "watch:vpnify": "nodemon --watch vpnify-src -x \"npx babel vpnify-src --out-dir vpnify-build\""
+    "watch:vpnify": "nodemon --watch vpnify-src -x \"npx babel vpnify-src --out-dir vpnify-build\"",
+    "watch:ircify": "nodemon --watch ircify-src -x \"npx babel ircify-src --out-dir ircify-build\""
   },
   "keywords": [],
   "author": "",
